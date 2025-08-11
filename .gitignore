@@ -7,6 +7,7 @@ __pycache__/
 *.pkl
 *.pdb
 *.so
+*.ex5
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
