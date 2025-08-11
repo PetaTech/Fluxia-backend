@@ -14,17 +14,6 @@ sys.path.insert(0, str(project_root))
 import uvicorn
 from app.config import config
 
-def setup_logging():
-    """Setup logging configuration"""
-    logging.basicConfig(
-        level=getattr(logging, config.LOG_LEVEL.upper(), logging.INFO),
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.StreamHandler(sys.stdout),
-            logging.FileHandler('fluxia_backend.log')
-        ]
-    )
-
 def main():
     """Main entry point"""
     print("🚀 Starting Fluxia EA Backend...")
@@ -34,15 +23,8 @@ def main():
     print(f"📊 Redis: {config.REDIS_URL}")
     print(f"🌐 OlympTrade WS: {config.OLYMPTRADE_WS_URI}")
     print("=" * 50)
-    
-    setup_logging()
-    
-    # Check required environment variables
-    if not config.OLYMPTRADE_ACCESS_TOKEN:
-        print("❌ ERROR: OLYMPTRADE_ACCESS_TOKEN is required")
-        print("Please set your OlympTrade access token in .env file")
-        return 1
-    
+
+    # Check required environment variables    
     if not config.OLYMPTRADE_REFRESH_TOKEN:
         print("❌ ERROR: OLYMPTRADE_REFRESH_TOKEN is required")
         print("Please set your OlympTrade refresh token in .env file")
