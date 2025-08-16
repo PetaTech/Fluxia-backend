@@ -9,27 +9,18 @@ import websocket
 import ssl
 from typing import Any, Dict, List, Optional
 from app.models import CandlestickData
+from app.services.token_service import get_token_service
 
 logger = logging.getLogger(__name__)
 
 class SimpleOlympTradeClient:
     """
-    Completely simplified OlympTrade client for historical data only.
-    No WebSocket subscriptions, no Redis, no callbacks, no real-time processing.
-    Just connect, fetch historical data, disconnect.
+    Simplified OlympTrade client that uses token service for authentication.
+    Gets access tokens from Redis and automatically refreshes when needed.
     """
     
-    def __init__(self, full_cookie: str, refresh_token: Optional[str] = None):
-        # Extract access token from cookie string
-        import re
-        match = re.search(r'access_token=([^;]+)', full_cookie)
-        if match:
-            self.access_token = match.group(1)
-        else:
-            raise ValueError("No access_token found in cookie string")
-        
-        self.full_cookie = full_cookie
-        self.refresh_token = refresh_token
+    def __init__(self):
+        self.token_service = get_token_service()
         
         # WebSocket connection variables
         self.ws = None
@@ -37,81 +28,28 @@ class SimpleOlympTradeClient:
         self.candle_responses = []
         self.ws_url = "wss://ws.olymptrade.com/otp?cid_ver=1&cid_app=web%40OlympTrade%402025.3.27106%4027106&cid_device=%40%40desktop&cid_os=windows%4010"
         
-    def is_token_expired(self) -> bool:
-        """Check if the current access token is expired"""
-        try:
-            decoded = jwt.decode(self.access_token, options={'verify_signature': False})
-            exp = decoded.get('exp')
-            if exp:
-                exp_time = datetime.fromtimestamp(exp)
-                now = datetime.now()
-                return now > exp_time
-        except Exception as e:
-            logger.error(f"Error checking token expiration: {e}")
-            return True
+    def ensure_access_token(self) -> bool:
+        """Ensure we have a valid access token, refresh if needed"""
+        # Check if we have an access token
+        if not self.token_service.is_access_token_available():
+            logger.info("No access token available, attempting refresh...")
+            result = self.token_service.refresh_access_token()
+            return result["success"]
         return True
-    
-    def refresh_access_token(self) -> bool:
-        """Refresh the access token using the refresh token"""
-        if not self.refresh_token:
-            logger.error("No refresh token available")
-            return False
-        
-        try:
-            logger.info("Refreshing access token...")
-            
-            # OlympTrade token refresh endpoint
-            url = "https://oauth.olymptrade.com/oauth2/token"
-            
-            headers = {
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36'
-            }
-            
-            data = {
-                'grant_type': 'refresh_token',
-                'refresh_token': self.refresh_token
-            }
-            
-            response = requests.post(url, headers=headers, data=data)
-            
-            if response.status_code == 200:
-                token_data = response.json()
-                new_access_token = token_data.get('access_token')
-                
-                if new_access_token:
-                    logger.info("Successfully refreshed access token")
-                    self.access_token = new_access_token
-                    
-                    # Update the cookie string with new access token
-                    import re
-                    self.full_cookie = re.sub(
-                        r'access_token=[^;]+',
-                        f'access_token={new_access_token}',
-                        self.full_cookie
-                    )
-                    
-                    return True
-                else:
-                    logger.error("No access_token in refresh response")
-                    return False
-            else:
-                logger.error(f"Token refresh failed: {response.status_code} - {response.text}")
-                return False
-                
-        except Exception as e:
-            logger.error(f"Error refreshing token: {e}")
-            return False
         
     def connect(self) -> bool:
         """Connect to OlympTrade WebSocket for historical data only"""
         try:
-            # Check if token is expired and refresh if needed
-            if self.is_token_expired():
-                logger.info("Access token is expired, attempting to refresh...")
-                if not self.refresh_access_token():
-                    logger.error("Failed to refresh token")
-                    return False
+            # Ensure we have a valid access token
+            if not self.ensure_access_token():
+                logger.error("Failed to obtain access token")
+                return False
+            
+            # Get full cookie string from token service
+            full_cookie = self.token_service.get_full_cookie_string()
+            if not full_cookie:
+                logger.error("Failed to generate cookie string")
+                return False
             
             # WebSocket connection
             logger.info("Connecting to OlympTrade WebSocket...")
@@ -125,7 +63,7 @@ class SimpleOlympTradeClient:
                 "Cache-Control: no-cache",
                 "Accept-Encoding: gzip, deflate, br, zstd",
                 "Accept-Language: en-GB,en-US;q=0.9,en;q=0.8",
-                f"Cookie: {self.full_cookie}"
+                f"Cookie: {full_cookie}"
             ]
             
             # Setup WebSocket callbacks
@@ -273,8 +211,4 @@ class SimpleOlympTradeClient:
 # Dependency function for FastAPI
 def get_simple_client() -> SimpleOlympTradeClient:
     """Get client instance for dependency injection"""
-    from app.config import config
-    return SimpleOlympTradeClient(
-        config.OLYMP_FULL_COOKIE,
-        config.OLYMPTRADE_REFRESH_TOKEN
-    )
+    return SimpleOlympTradeClient()

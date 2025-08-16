@@ -5,10 +5,10 @@ from dotenv import load_dotenv
 load_dotenv()
 
 class Config:
-    # Simplified configuration - just use the direct token and cookie
-    OLYMP_FULL_COOKIE: str = os.getenv("OLYMPTRADE_COOKIE_STRING", "")
+    # Simplified configuration - only refresh token needed (stored in Redis via API)
+    # OLYMP_FULL_COOKIE: Removed - now generated dynamically with current access token
+    # OLYMPTRADE_REFRESH_TOKEN: Removed - now stored in Redis via token service
     
-    OLYMPTRADE_REFRESH_TOKEN: str = os.getenv("OLYMPTRADE_REFRESH_TOKEN", "")
     REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
     API_HOST: str = os.getenv("API_HOST", "127.0.0.1")
     API_PORT: int = int(os.getenv("API_PORT", "8000"))

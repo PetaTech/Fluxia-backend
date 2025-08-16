@@ -24,11 +24,9 @@ def main():
     print(f"🌐 OlympTrade WS: {config.OLYMPTRADE_WS_URI}")
     print("=" * 50)
 
-    # Check required environment variables    
-    if not config.OLYMPTRADE_REFRESH_TOKEN:
-        print("❌ ERROR: OLYMPTRADE_REFRESH_TOKEN is required")
-        print("Please set your OlympTrade refresh token in .env file")
-        return 1
+    # Token management is now handled via API endpoints - no env vars needed
+    print("ℹ️  Token management: Use POST /ea/token/initialize to setup refresh token")
+    print("ℹ️  Daily refresh: Use POST /ea/token/refresh for cron jobs")
     
     try:
         # Start the server

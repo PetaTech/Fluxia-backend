@@ -11,6 +11,7 @@ from app.models import (
 )
 from app.services.simple_olymptrade_client import SimpleOlympTradeClient, get_simple_client
 from app.services.redis_cache import redis_cache
+from app.services.token_service import get_token_service
 from app.config import config
 
 logger = logging.getLogger(__name__)
@@ -160,3 +161,86 @@ def generate_metatrader_csv(candles: List[CandlestickData], currency_pair: str) 
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
+
+# Token management endpoints
+@router.post("/token/refresh")
+async def refresh_access_token():
+    """
+    Manually refresh the access token using stored refresh token.
+    This endpoint can be called by a cron job to refresh tokens daily.
+    """
+    try:
+        token_service = get_token_service()
+        result = token_service.refresh_access_token()
+        
+        if result["success"]:
+            return {
+                "success": True,
+                "message": result["message"],
+                "expires_in": result.get("expires_in"),
+                "token_available": token_service.is_access_token_available()
+            }
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Token refresh failed: {result['message']}"
+            )
+            
+    except Exception as e:
+        logger.error(f"Error in token refresh endpoint: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Token refresh error: {str(e)}"
+        )
+
+@router.post("/token/initialize")
+async def initialize_token_service(refresh_token: str):
+    """
+    Initialize the token service with a refresh token.
+    This should be called once to set up the refresh token.
+    """
+    try:
+        if not refresh_token:
+            raise HTTPException(status_code=400, detail="refresh_token is required")
+        
+        token_service = get_token_service()
+        result = token_service.initialize_from_refresh_token(refresh_token)
+        
+        if result["success"]:
+            return {
+                "success": True,
+                "message": "Token service initialized successfully",
+                "expires_in": result.get("expires_in"),
+                "token_available": token_service.is_access_token_available()
+            }
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Token initialization failed: {result['message']}"
+            )
+            
+    except Exception as e:
+        logger.error(f"Error in token initialization: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Token initialization error: {str(e)}"
+        )
+
+@router.get("/token/status")
+async def get_token_status():
+    """
+    Get current token status - whether we have a valid access token.
+    """
+    try:
+        token_service = get_token_service()
+        return {
+            "access_token_available": token_service.is_access_token_available(),
+            "refresh_token_available": token_service.get_refresh_token() is not None
+        }
+        
+    except Exception as e:
+        logger.error(f"Error checking token status: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Token status error: {str(e)}"
+        )
